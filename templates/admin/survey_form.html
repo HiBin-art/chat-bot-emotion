@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑问卷' if survey else '创建问卷' }}{% endblock %}
+{% block head %}
+<meta name="csrf-token" content="{{ csrf_token() }}">
+{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <div class="admin-sidebar">
+        <div class="admin-header">
+            <h2>管理面板</h2>
+        </div>
+        <div class="admin-nav">
+            <a href="{{ url_for('admin_users') }}" class="nav-item">
+                <span class="nav-icon">👥</span>
+                用户管理
+            </a>
+            <a href="{{ url_for('admin_announcements') }}" class="nav-item">
+                <span class="nav-icon">📢</span>
+                公告管理
+            </a>
+            <a href="{{ url_for('admin_surveys') }}" class="nav-item active">
+                <span class="nav-icon">📝</span>
+                问卷管理
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-content">
+        <div class="content-header">
+            <h2>{{ '编辑问卷' if survey else '创建问卷' }}</h2>
+            <div class="header-actions">
+                <button onclick="history.back()" class="btn-secondary">返回</button>
+                <button onclick="saveDraft()" class="btn-secondary">保存草稿</button>
+                <button onclick="saveAndPublish()" class="btn-primary">发布问卷</button>
+            </div>
+        </div>
+
+        <div class="survey-form-container">
+            <form id="surveyForm" method="POST">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="title">问卷标题</label>
+                    <input type="text" id="title" name="title" required 
+                           value="{{ survey.title if survey else '' }}"
+                           placeholder="请输入问卷标题">
+                </div>
+                
+                <div class="form-group">
+                    <label for="description">问卷说明</label>
+                    <textarea id="description" name="description" rows="3"
+                              placeholder="请输入问卷说明">{{ survey.description if survey else '' }}</textarea>
+                </div>
+
+                <div class="questions-section">
+                    <div class="section-header">
+                        <h3>问题列表</h3>
+                        <div class="question-actions">
+                            <button type="button" onclick="addQuestion('text')" class="btn-secondary">
+                                <span class="icon">📝</span>文本题
+                            </button>
+                            <button type="button" onclick="addQuestion('single_choice')" class="btn-secondary">
+                                <span class="icon">⭕</span>单选题
+                            </button>
+                            <button type="button" onclick="addQuestion('multiple_choice')" class="btn-secondary">
+                                <span class="icon">☑️</span>多选题
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div id="questions-container">
+                        <!-- 问题列表将通过 JavaScript 动态添加 -->
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let questionTemplate = {
+    text: {
+        type: 'text',
+        text: '',
+        required: true
+    },
+    single_choice: {
+        type: 'single_choice',
+        text: '',
+        required: true,
+        options: ['选项1']
+    },
+    multiple_choice: {
+        type: 'multiple_choice',
+        text: '',
+        required: true,
+        options: ['选项1']
+    }
+};
+
+// 初始化问题列表
+document.addEventListener('DOMContentLoaded', function() {
+    {% if survey and survey.questions %}
+        // 加载现有问题
+        {% for q in survey.questions %}
+            addExistingQuestion({{ q|tojson|safe }});
+        {% endfor %}
+    {% endif %}
+});
+
+function addExistingQuestion(question) {
+    const container = document.getElementById('questions-container');
+    const questionDiv = createQuestionElement(question);
+    container.appendChild(questionDiv);
+}
+
+function addQuestion(type) {
+    const container = document.getElementById('questions-container');
+    const question = {...questionTemplate[type]};
+    const questionDiv = createQuestionElement(question);
+    container.appendChild(questionDiv);
+}
+
+function createQuestionElement(question) {
+    const div = document.createElement('div');
+    div.className = 'question-item';
+    
+    const header = document.createElement('div');
+    header.className = 'question-header';
+    
+    const questionInput = document.createElement('input');
+    questionInput.type = 'text';
+    questionInput.className = 'question-text';
+    questionInput.value = question.text;
+    questionInput.placeholder = '请输入问题内容';
+    
+    const controls = document.createElement('div');
+    controls.className = 'question-controls';
+    
+    const requiredToggle = document.createElement('label');
+    requiredToggle.className = 'toggle-label';
+    requiredToggle.innerHTML = `
+        <input type="checkbox" ${question.required ? 'checked' : ''}>
+        <span>必答</span>
+    `;
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn-danger';
+    deleteBtn.textContent = '删除';
+    deleteBtn.onclick = () => div.remove();
+    
+    controls.appendChild(requiredToggle);
+    controls.appendChild(deleteBtn);
+    
+    header.appendChild(questionInput);
+    header.appendChild(controls);
+    div.appendChild(header);
+    
+    if (question.type !== 'text') {
+        const optionsContainer = document.createElement('div');
+        optionsContainer.className = 'options-container';
+        
+        const optionsList = document.createElement('div');
+        optionsList.className = 'options-list';
+        
+        question.options.forEach(option => {
+            const optionDiv = createOptionElement(option);
+            optionsList.appendChild(optionDiv);
+        });
+        
+        const addOptionBtn = document.createElement('button');
+        addOptionBtn.type = 'button';
+        addOptionBtn.className = 'btn-secondary add-option';
+        addOptionBtn.textContent = '添加选项';
+        addOptionBtn.onclick = () => {
+            const optionDiv = createOptionElement('新选项');
+            optionsList.appendChild(optionDiv);
+        };
+        
+        optionsContainer.appendChild(optionsList);
+        optionsContainer.appendChild(addOptionBtn);
+        div.appendChild(optionsContainer);
+    }
+    
+    div.dataset.type = question.type;
+    return div;
+}
+
+function createOptionElement(optionText) {
+    const div = document.createElement('div');
+    div.className = 'option-item';
+    
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = optionText;
+    input.placeholder = '请输入选项内容';
+    
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'btn-danger';
+    deleteBtn.textContent = '删除';
+    deleteBtn.onclick = () => div.remove();
+    
+    div.appendChild(input);
+    div.appendChild(deleteBtn);
+    return div;
+}
+
+function collectFormData() {
+    const questions = [];
+    document.querySelectorAll('.question-item').forEach(item => {
+        const question = {
+            type: item.dataset.type,
+            text: item.querySelector('.question-text').value,
+            required: item.querySelector('input[type="checkbox"]').checked
+        };
+        
+        if (question.type !== 'text') {
+            question.options = Array.from(
+                item.querySelectorAll('.option-item input')
+            ).map(input => input.value);
+        }
+        
+        questions.push(question);
+    });
+    
+    return {
+        title: document.getElementById('title').value,
+        description: document.getElementById('description').value,
+        questions: questions
+    };
+}
+
+function saveSurvey(status) {
+    const data = collectFormData();
+    data.status = status;
+    
+    const url = {{ '`/admin/surveys/${survey.id}/edit`' if survey else '"/admin/surveys/new"' | safe }};
+    
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('input[name="csrf_token"]').value
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('保存成功！');
+            window.location.href = "{{ url_for('admin_surveys') }}";
+        } else {
+            alert('保存失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('保存失败: ' + error.message);
+    });
+}
+
+function saveDraft() {
+    saveSurvey('draft');
+}
+
+function saveAndPublish() {
+    if (confirm('确定要发布问卷吗？发布后将立即对用户可见。')) {
+        saveSurvey('published');
+    }
+}
+</script>
+
+<style>
+.survey-form-container {
+    background: white;
+    padding: 2em;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.header-actions {
+    display: flex;
+    gap: 1em;
+}
+
+.questions-section {
+    margin-top: 2em;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1em;
+}
+
+.question-actions {
+    display: flex;
+    gap: 1em;
+}
+
+.question-item {
+    background: #f8f9fa;
+    padding: 1.5em;
+    border-radius: 8px;
+    margin-bottom: 1em;
+}
+
+.question-header {
+    display: flex;
+    gap: 1em;
+    margin-bottom: 1em;
+}
+
+.question-text {
+    flex: 1;
+    padding: 0.5em;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}
+
+.question-controls {
+    display: flex;
+    gap: 1em;
+    align-items: center;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: pointer;
+}
+
+.options-container {
+    margin-top: 1em;
+}
+
+.options-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    margin-bottom: 1em;
+}
+
+.option-item {
+    display: flex;
+    gap: 1em;
+    align-items: center;
+}
+
+.option-item input {
+    flex: 1;
+    padding: 0.5em;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+}
+
+.add-option {
+    width: 100%;
+    padding: 0.5em;
+    background: #f3f4f6;
+    border: 1px dashed #d1d5db;
+}
+
+.icon {
+    margin-right: 0.5em;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: white;
+    border: none;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+</style>
+{% endblock %} 

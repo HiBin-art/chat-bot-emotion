@@ -1,0 +1,1828 @@
+{% extends "base.html" %}
+{% block title %}聊天{% endblock %}
+{% block content %}
+<div class="chat-page">
+    <!-- 添加移动端顶部栏 -->
+    <div class="mobile-header">
+        <button class="menu-toggle" onclick="toggleSidebar()">≡</button>
+        <span class="current-session-title" id="mobile-session-name">选择会话</span>
+        <button class="role-toggle" onclick="toggleMobileRoleSelector()">
+            <svg class="role-icon" viewBox="0 0 24 24" width="24" height="24">
+                <path fill="currentColor" d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-5-8c.83 0 1.5-.67 1.5-1.5S7.83 9 7 9s-1.5.67-1.5 1.5S6.17 12 7 12zm8-1.5c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5.67 1.5 1.5 1.5 1.5-.67 1.5-1.5zM9 13.5c0 .83.67 1.5 1.5 1.5h3c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5h-3c-.83 0-1.5.67-1.5 1.5z"/>
+            </svg>
+            <div class="role-info">
+                <span class="current-role-name">默认助手</span>
+                <span class="role-arrow">⌄</span>
+            </div>
+        </button>
+    </div>
+
+    <div class="sessions-sidebar">
+        <div class="sessions-header">
+            <h3>对话列表</h3>
+            <button onclick="createSession()">新建对话</button>
+        </div>
+        <!-- 移动端导航菜单 -->
+        <div class="mobile-nav">
+            <a href="{{ url_for('view_announcements') }}" class="nav-item">
+                <span class="icon">📢</span>
+                <span>公告</span>
+            </a>
+            <a href="{{ url_for('view_surveys') }}" class="nav-item">
+                <span class="icon">📋</span>
+                <span>问卷</span>
+            </a>
+        </div>
+        <div id="sessions-list"></div>
+    </div>
+    <div class="chat-container">
+        <!-- PC端角色选择器 -->
+        <div class="role-selector desktop-only">
+            <div class="role-selector-header">
+                <div class="role-selector-title">
+                    <span>当前角色</span>
+                    <button class="toggle-roles-btn" onclick="toggleRoleList()">
+                        <span id="current-role-name">默认助手</span>
+                        <span class="arrow">▼</span>
+                    </button>
+                </div>
+                <span id="current-role-description" class="role-description"></span>
+            </div>
+            <div class="role-list" style="display: none;">
+                <!-- 将由JavaScript动态填充 -->
+            </div>
+        </div>
+        <div class="chat-header">
+            <span id="current-session-name"></span>
+            <div class="session-actions">
+                <button onclick="renameSession(currentSessionId)" class="icon-button">重命名</button>
+                <button onclick="deleteSession(currentSessionId)" class="icon-button">删除</button>
+            </div>
+        </div>
+        <div id="chat-messages"></div>
+        <div class="chat-input">
+            <input type="text" id="message-input" placeholder="输入消息...">
+            <button onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+</div>
+
+<div id="announcement-modal" class="modal">
+    <div class="modal-content">
+        <div class="announcement-header">
+            <h3>系统公告</h3>
+            <span class="close">&times;</span>
+        </div>
+        <div id="announcement-content"></div>
+        <div class="announcement-footer">
+            <button onclick="markAnnouncementRead()" class="btn-primary">我已阅读</button>
+        </div>
+    </div>
+</div>
+
+<!-- 移动端角色选择器 -->
+<div class="mobile-role-selector">
+    <div class="mobile-role-header">
+        <h3>选择角色</h3>
+        <button class="close-btn" onclick="toggleMobileRoleSelector()">×</button>
+    </div>
+    <div class="mobile-role-list">
+        <!-- 将由JavaScript动态填充 -->
+    </div>
+</div>
+
+<script>
+let currentSessionId = null;
+let sessions = [];
+let currentAnnouncement = null;
+let pageInitialized = false;
+let currentRole = null;  // 添加当前角色状态
+
+// 获取CSRF token
+const csrfToken = document.querySelector('meta[name="csrf-token"]').content;
+
+// 修改初始化函数
+async function initializePage() {
+    if (pageInitialized || initializePage.isInitializing) return;
+    initializePage.isInitializing = true;
+    
+    try {
+        setLoading(true);
+        
+        // 检查会话状态
+        const response = await fetch('/api/check-session', {
+            credentials: 'same-origin',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken
+            }
+        });
+        
+        const data = await response.json().catch(() => ({}));
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                window.location.href = '/login';
+                return;
+            } else if (response.status === 403 && data.code === 'account_disabled') {
+                showMessage(data.message, 'error');
+                setTimeout(() => {
+                    window.location.href = '/login';
+                }, 2000);
+                return;
+            }
+            throw new Error(data.message || '会话检查失败');
+        }
+        
+        // 设置初始化标志
+        pageInitialized = true;
+        
+        // 加载会话列表
+        const response2 = await fetch('/api/sessions', {
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            }
+        });
+        
+        const sessionsData = await response2.json();
+        
+        if (sessionsData.status === 'success') {
+            sessions = sessionsData.sessions;
+            renderSessionsList();
+            
+            // 恢复上次会话
+            const savedSessionId = localStorage.getItem('currentSessionId');
+            if (savedSessionId && sessions.find(s => s.session_id === parseInt(savedSessionId))) {
+                await switchSession(parseInt(savedSessionId));
+            } else if (sessions.length > 0) {
+                await switchSession(sessions[0].session_id);
+            } else {
+                await createSession();
+            }
+            
+            // 检查未读公告（非关键功能）
+            checkUnreadAnnouncements().catch(error => {
+                console.error('检查未读公告失败:', error);
+            });
+        } else {
+            throw new Error(sessionsData.message || '加载会话失败');
+        }
+        
+    } catch (error) {
+        console.error('初始化失败:', error);
+        showMessage('登录状态已失效，请重新登录', 'error');
+        pageInitialized = false;
+        
+        // 如果是严重错误，重定向到登录页面
+        if (error.message.includes('账户已禁用') || error.message.includes('用户不存在')) {
+            setTimeout(() => {
+                window.location.href = '/login';
+            }, 2000);
+        }
+    } finally {
+        setLoading(false);
+        initializePage.isInitializing = false;
+    }
+}
+
+// 修改 DOMContentLoaded 事件处理
+document.addEventListener('DOMContentLoaded', function() {
+    // 初始化页面
+    initializePage();
+    
+    // 添加输入框事件监听
+    const input = document.getElementById('message-input');
+    if (input) {
+        input.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+    }
+
+    // 加载角色列表
+    loadRoles();
+});
+
+// 修改会话检查函数
+async function checkSession() {
+    // 如果页面已初始化，直接返回
+    if (pageInitialized) return true;
+    
+    // 如果正在初始化，等待初始化完成
+    if (initializePage.isInitializing) {
+        await new Promise(resolve => {
+            const checkInit = () => {
+                if (!initializePage.isInitializing) {
+                    resolve();
+                } else {
+                    setTimeout(checkInit, 100);
+                }
+            };
+            checkInit();
+        });
+        return pageInitialized;
+    }
+    
+    // 否则开始初始化
+    await initializePage();
+    return pageInitialized;
+}
+
+// 修改加载会话列表函数
+async function loadSessions() {
+    try {
+        const result = await fetchWithRetry('/api/sessions');
+        if (result.status === 'success') {
+            sessions = result.sessions;
+            renderSessionsList();
+            return true;
+        }
+        throw new Error(result.message || '加载会话列表失败');
+    } catch (error) {
+        console.error('加载会话列表失败:', error);
+        showMessage('加载会话列表失败，请刷新页面重试', 'error');
+        return false;
+    }
+}
+
+// 修改切换会话函数
+async function switchSession(sessionId) {
+    if (!sessionId || !pageInitialized) return;
+    
+    try {
+        currentSessionId = sessionId;
+        localStorage.setItem('currentSessionId', sessionId);
+        
+        // 更新UI
+        renderSessionsList();
+        
+        // 更新会话名称
+        const session = sessions.find(s => s.session_id === sessionId);
+        if (session) {
+            document.getElementById('current-session-name').textContent = session.session_name;
+            document.getElementById('mobile-session-name').textContent = session.session_name;
+        }
+        
+        // 加载聊天历史
+        await loadChatHistory(sessionId);
+        
+        // 在移动端切换会话后关闭侧边栏
+        if (window.innerWidth <= 768) {
+            toggleSidebar();
+        }
+        
+    } catch (error) {
+        console.error('切换会话失败:', error);
+        showMessage('切换会话失败，请重试', 'error');
+    }
+}
+
+// 添加页面可见性变化监听
+document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'visible' && !pageInitialized) {
+        initializePage();
+    }
+});
+
+// 加载聊天历史
+async function loadChatHistory(sessionId) {
+    try {
+        const result = await fetchWithRetry(`/api/history/${sessionId}`);
+        if (result.status === 'success') {
+            const chatContent = document.getElementById('chat-messages');
+            chatContent.innerHTML = '';
+            
+            result.history.forEach(item => {
+                appendMessage('user', item.message);
+                appendMessage('assistant', item.response);
+            });
+            
+            chatContent.scrollTop = chatContent.scrollHeight;
+        } else {
+            throw new Error(result.message || '加载历史记录失败');
+        }
+    } catch (error) {
+        console.error('加载历史记录失败:', error);
+        showMessage('加载历史记录失败，请重试', 'error');
+    }
+}
+
+// 发送消息
+async function sendMessage() {
+    const messageInput = document.getElementById('message-input');
+    const message = messageInput.value.trim();
+    
+    if (!message) return;
+    
+    try {
+        // 显示用户消息
+        appendMessage('user', message);
+        messageInput.value = '';
+        
+        const response = await fetchWithRetry('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({
+                message: message,
+                session_id: currentSessionId
+            })
+        });
+        
+        if (response && response.status === 'success' && response.response) {
+            appendMessage('assistant', response.response);
+        } else {
+            throw new Error(response.message || '获取回复失败');
+        }
+    } catch (error) {
+        console.error('发送消息失败:', error);
+        showMessage('发送消息失败: ' + (error.message || '未知错误'), 'error');
+        // 显示一个友好的错误消息
+        appendMessage('assistant', '抱歉，我遇到了一些问题，请稍后再试。');
+    }
+}
+
+// 创建新会话
+async function createSession() {
+    try {
+        const result = await fetchWithRetry('/api/sessions', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: `对话 ${new Date().toLocaleString()}`
+            })
+        });
+        
+        if (result.status === 'success') {
+            await loadSessions();
+            switchSession(result.session_id);
+        } else {
+            throw new Error(result.message || '创建会话失败');
+        }
+    } catch (error) {
+        console.error('创建会话失败:', error);
+        showMessage('创建会话失败，请重试', 'error');
+    }
+}
+
+// 检查未读公告
+async function checkUnreadAnnouncements() {
+    try {
+        const result = await fetchWithRetry('/api/announcements/unread');
+        if (result.status === 'success' && result.announcements && result.announcements.length > 0) {
+            showAnnouncements(result.announcements);
+        }
+    } catch (error) {
+        console.error('检查未读公告失败:', error);
+        // 非关键功能，失败时静默处理
+    }
+}
+
+// 重命名当前会话
+function renameSession(sessionId) {
+    const newName = prompt('请输入新的会话名称：');
+    if (!newName) return;
+
+    fetch(`/api/sessions/${sessionId}`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': csrfToken
+        },
+        body: JSON.stringify({ name: newName })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            loadSessions();
+        } else {
+            alert('重命名失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('重命名失败');
+    });
+}
+
+// 删除当前会话
+function deleteSession(sessionId) {
+    if (!confirm('确定要删除这个会话吗？')) return;
+
+    fetch(`/api/sessions/${sessionId}`, {
+        method: 'DELETE',
+        headers: {
+            'X-CSRF-TOKEN': csrfToken
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            loadSessions();
+            if (currentSessionId === sessionId) {
+                currentSessionId = null;
+                document.getElementById('chat-messages').innerHTML = '';
+            }
+        } else {
+            alert('删除失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('删除失败');
+    });
+}
+
+// 格式化日期
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString();
+}
+
+function addMessage(message, isUser) {
+    const messagesDiv = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = isUser ? 'message user-message' : 'message bot-message';
+    messageDiv.textContent = message;
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+// 添加错误提示函数
+function showError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    document.body.appendChild(errorDiv);
+    setTimeout(() => errorDiv.remove(), 3000);
+}
+
+// 显示公告
+function showAnnouncements(announcements) {
+    if (!announcements || announcements.length === 0) return;
+    
+    const modal = document.getElementById('announcement-modal');
+    const content = document.getElementById('announcement-content');
+    
+    // 保存当前公告
+    currentAnnouncement = announcements[0];
+    
+    // 更新公告内容
+    content.innerHTML = `
+        <h4 class="announcement-title">${currentAnnouncement.title}</h4>
+        <div class="announcement-time">发布时间：${currentAnnouncement.created_at}</div>
+        <div class="announcement-body">${currentAnnouncement.content}</div>
+    `;
+    
+    // 显示模态框
+    modal.style.display = 'block';
+    
+    // 添加关闭事件
+    const closeBtn = modal.querySelector('.close');
+    closeBtn.onclick = function() {
+        modal.style.display = 'none';
+        markAnnouncementRead();
+    };
+    
+    // 点击模态框外部关闭
+    window.onclick = function(event) {
+        if (event.target == modal) {
+            modal.style.display = 'none';
+            markAnnouncementRead();
+        }
+    };
+}
+
+// 标记公告已读
+async function markAnnouncementRead() {
+    if (!currentAnnouncement) return;
+    
+    try {
+        const result = await fetchWithRetry(
+            `/api/announcements/${currentAnnouncement.id}/read`,
+            {
+                method: 'POST'
+            }
+        );
+        
+        if (result.status === 'success') {
+            document.getElementById('announcement-modal').style.display = 'none';
+            currentAnnouncement = null;
+        } else {
+            throw new Error(result.message || '标记已读失败');
+        }
+    } catch (error) {
+        console.error('标记公告已读失败:', error);
+        showMessage('标记已读失败，请重试', 'error');
+    }
+}
+
+// 页面加载时检查未读公告
+document.addEventListener('DOMContentLoaded', checkUnreadAnnouncements);
+
+// 添加消息提示函数
+function showMessage(message, type = 'info') {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message-toast ${type}`;
+    messageDiv.textContent = message;
+    document.body.appendChild(messageDiv);
+    
+    // 添加动画效果
+    setTimeout(() => {
+        messageDiv.classList.add('show');
+    }, 100);
+    
+    // 3秒后移除
+    setTimeout(() => {
+        messageDiv.classList.remove('show');
+        setTimeout(() => messageDiv.remove(), 3000);
+    }, 3000);
+}
+
+// 添加消息到聊天区域
+function appendMessage(role, message) {
+    const chatContent = document.getElementById('chat-messages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role === 'user' ? 'user' : 'assistant'}-message`;
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'message-content';
+    
+    // 添加角色标识
+    const roleSpan = document.createElement('span');
+    roleSpan.className = 'role-label';
+    roleSpan.textContent = role === 'user' ? '用户' : '助手';
+    contentDiv.appendChild(roleSpan);
+    
+    // 添加消息内容
+    const textSpan = document.createElement('span');
+    textSpan.className = 'message-text';
+    textSpan.textContent = message;
+    contentDiv.appendChild(textSpan);
+    
+    messageDiv.appendChild(contentDiv);
+    chatContent.appendChild(messageDiv);
+    chatContent.scrollTop = chatContent.scrollHeight;
+}
+
+// 修改会话列表渲染
+function renderSessionsList() {
+    const sessionList = document.getElementById('sessions-list');
+    sessionList.innerHTML = '';
+    
+    sessions.forEach(session => {
+        const li = document.createElement('li');
+        li.className = `session-item ${session.session_id === currentSessionId ? 'active' : ''}`;
+        li.dataset.sessionId = session.session_id;
+        li.innerHTML = `
+            <span class="session-name">${session.session_name}</span>
+            <div class="session-actions">
+                <button onclick="renameSession(${session.session_id})" class="btn-icon">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button onclick="deleteSession(${session.session_id})" class="btn-icon">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        `;
+        li.onclick = () => switchSession(session.session_id);
+        sessionList.appendChild(li);
+    });
+}
+
+// 添加样式
+const style = document.createElement('style');
+style.textContent = `
+.message-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 24px;
+    border-radius: 4px;
+    color: white;
+    opacity: 0;
+    transform: translateY(-20px);
+    transition: all 0.3s ease;
+    z-index: 1000;
+}
+
+.message-toast.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.message-toast.success {
+    background-color: #10B981;
+}
+
+.message-toast.error {
+    background-color: #EF4444;
+}
+
+.message-toast.info {
+    background-color: #3B82F6;
+}
+
+.chat-message {
+    display: flex;
+    margin: 12px;
+    gap: 12px;
+}
+
+.message-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #f3f4f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+.message-content {
+    flex: 1;
+    max-width: 80%;
+}
+
+.message-name {
+    font-size: 14px;
+    color: #6B7280;
+    margin-bottom: 4px;
+}
+
+.message-text {
+    padding: 12px;
+    border-radius: 8px;
+    background: #F3F4F6;
+}
+
+.user-message .message-text {
+    background: #DBEAFE;
+}
+
+.bot-message .message-text {
+    background: #F3F4F6;
+}
+
+.session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    border-bottom: 1px solid #E5E7EB;
+    cursor: pointer;
+}
+
+.session-item:hover {
+    background: #F9FAFB;
+}
+
+.session-item.active {
+    background: #EFF6FF;
+}
+
+.session-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-icon {
+    padding: 4px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    color: #6B7280;
+}
+
+.btn-icon:hover {
+    color: #374151;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+}
+
+.modal-content {
+    position: relative;
+    background-color: white;
+    margin: 10% auto;
+    padding: 20px;
+    width: 80%;
+    max-width: 600px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.announcement-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.announcement-title {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #1f2937;
+}
+
+.announcement-time {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-bottom: 12px;
+}
+
+.announcement-body {
+    line-height: 1.6;
+    color: #374151;
+}
+
+.announcement-footer {
+    margin-top: 20px;
+    text-align: right;
+}
+
+.close {
+    color: #6b7280;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.close:hover {
+    color: #1f2937;
+}
+
+.btn-primary {
+    background-color: #2563eb;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #1d4ed8;
+}
+
+/* 桌面端/移动端显示控制 */
+.desktop-only {
+    display: block;
+}
+
+.mobile-only {
+    display: none;
+}
+
+/* 移动端顶部栏 */
+.mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 0 15px;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+}
+
+/* 移动端角色切换按钮 */
+.role-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f0f2f5;
+    border: none;
+    border-radius: 20px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    min-width: 120px;
+    height: 36px;
+}
+
+.role-toggle:active {
+    background: #e4e6e9;
+}
+
+.role-toggle .role-icon {
+    width: 24px;
+    height: 24px;
+    color: #666;
+}
+
+.role-toggle .role-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.role-toggle .current-role-name {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.role-toggle .role-arrow {
+    font-size: 18px;
+    transition: transform 0.3s;
+    color: #666;
+}
+
+/* 移动端角色选择器样式 */
+.mobile-role-selector {
+    position: fixed;
+    top: 50px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+.mobile-role-header {
+    background: #fff;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+
+.mobile-role-list {
+    background: #fff;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.mobile-role-item {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    position: relative;
+    transition: background-color 0.2s;
+}
+
+.mobile-role-item:active {
+    background: #f0f0f0;
+}
+
+.mobile-role-item.active {
+    background: #e3f2fd;
+    border-left: 4px solid #1a73e8;
+}
+
+.mobile-role-item.active:active {
+    background: #d3e5fc;
+}
+
+.mobile-role-item .role-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: #333;
+}
+
+.mobile-role-item .role-description {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+}
+
+/* 添加选中标记 */
+.mobile-role-item.active::after {
+    content: '✓';
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #1a73e8;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* 移动端会话操作按钮 */
+.mobile-session-actions {
+    display: none;
+    padding: 10px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    gap: 10px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.action-btn:hover {
+    background: #f5f5f5;
+}
+
+.action-btn .icon {
+    font-size: 16px;
+}
+
+/* 移动端导航菜单 */
+.mobile-nav {
+    display: none;
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    gap: 15px;
+}
+
+.mobile-nav .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #f5f5f5;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.mobile-nav .nav-item .icon {
+    font-size: 18px;
+}
+
+@media screen and (max-width: 768px) {
+    .mobile-nav {
+        display: flex;
+    }
+
+    .chat-container {
+        width: 100%;
+        height: calc(100vh - 50px);
+        padding-bottom: env(safe-area-inset-bottom);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .chat-input {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #fff;
+        padding: 10px 15px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        border-top: 1px solid #ddd;
+        z-index: 100;
+        display: flex;
+        gap: 10px;
+    }
+    
+    #chat-messages {
+        flex: 1;
+        padding-bottom: calc(70px + env(safe-area-inset-bottom));  /* 为输入框和安全区域留出空间 */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .sessions-sidebar {
+        position: fixed;
+        top: 50px;
+        bottom: 0;
+        left: -100%;
+        width: 100%;
+        height: calc(100vh - 50px);
+        background: #fff;
+        transition: left 0.3s ease;
+        z-index: 998;
+        display: flex;
+        flex-direction: column;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    .sessions-list {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 20px;  /* 为底部添加一些空间 */
+    }
+}
+
+/* iOS 安全区域适配 */
+@supports (padding: max(0px)) {
+    .mobile-header {
+        padding-top: max(0px, env(safe-area-inset-top));
+        height: calc(50px + env(safe-area-inset-top));
+    }
+    
+    .chat-page {
+        padding-top: calc(50px + env(safe-area-inset-top));
+    }
+    
+    .sessions-sidebar {
+        top: calc(50px + env(safe-area-inset-top));
+        height: calc(100vh - 50px - env(safe-area-inset-top));
+    }
+    
+    .chat-input {
+        padding-bottom: max(15px, env(safe-area-inset-bottom));
+    }
+}
+`;
+
+document.head.appendChild(style);
+
+// 添加全局错误处理
+window.addEventListener('unhandledrejection', function(event) {
+    console.error('未处理的Promise错误:', event.reason);
+    showMessage('发生错误，请刷新页面重试', 'error');
+});
+
+window.onerror = function(message, source, lineno, colno, error) {
+    console.error('全局错误:', {message, source, lineno, colno, error});
+    showMessage('发生错误，请刷新页面重试', 'error');
+    return false;
+};
+
+// 添加加载状态管理
+function setLoading(loading) {
+    const loadingEl = document.getElementById('loading');
+    if (!loadingEl) {
+        const div = document.createElement('div');
+        div.id = 'loading';
+        div.className = 'loading-indicator' + (loading ? ' show' : '');
+        div.innerHTML = '<div class="spinner"></div>';
+        document.body.appendChild(div);
+    } else {
+        loadingEl.className = 'loading-indicator' + (loading ? ' show' : '');
+    }
+}
+
+// 添加相关样式
+const loadingStyle = `
+.loading-indicator {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.loading-indicator.show {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #3498db;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+`;
+
+style.textContent += loadingStyle;
+
+// 修改 fetchWithRetry 函数
+async function fetchWithRetry(url, options = {}, retries = 3) {
+    const isNonCritical = url.includes('/announcements/unread');  // 标记非关键请求
+    
+    try {
+        for (let i = 0; i < retries; i++) {
+            try {
+                const response = await fetch(url, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        ...options.headers
+                    },
+                    credentials: 'same-origin'
+                });
+                
+                // 如果服务器返回500错误
+                if (response.status === 500) {
+                    const error = new Error('服务器内部错误');
+                    error.isServerError = true;
+                    throw error;
+                }
+                
+                const data = await response.json().catch(() => ({
+                    status: 'error',
+                    message: '解析响应失败'
+                }));
+                
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        pageInitialized = false;
+                        window.location.href = '/login';
+                        return data;
+                    }
+                    throw new Error(data.message || `HTTP error! status: ${response.status}`);
+                }
+                
+                return data;
+                
+            } catch (error) {
+                console.error(`Attempt ${i + 1} failed:`, error);
+                // 如果是服务器错误或连接重置，且是非关键请求，不重试
+                if ((error.isServerError || error.message.includes('ERR_CONNECTION_RESET')) && isNonCritical) {
+                    throw error;
+                }
+                if (i === retries - 1) throw error;
+                await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+            }
+        }
+    } finally {
+        setLoading(false);
+    }
+}
+
+// 切换角色列表显示
+function toggleRoleList() {
+    const roleList = document.querySelector('.role-list');
+    const arrow = document.querySelector('.toggle-roles-btn .arrow');
+    
+    if (roleList.style.display === 'none') {
+        roleList.style.display = 'block';
+        arrow.style.transform = 'rotate(180deg)';
+    } else {
+        roleList.style.display = 'none';
+        arrow.style.transform = '';
+    }
+}
+
+// 切换移动端角色选择器
+function toggleMobileRoleSelector() {
+    const selector = document.querySelector('.mobile-role-selector');
+    const roleArrow = document.querySelector('.role-toggle .role-arrow');
+    selector.classList.toggle('show');
+    // 切换箭头方向
+    if (roleArrow) {
+        roleArrow.style.transform = selector.classList.contains('show') ? 'rotate(180deg)' : '';
+    }
+}
+
+// 修改加载角色列表函数
+async function loadRoles() {
+    try {
+        const response = await fetchWithRetry('/api/roles');
+        
+        if (response.status === 'success') {
+            const roleList = document.querySelector('.role-list');
+            const mobileRoleList = document.querySelector('.mobile-role-list');
+            
+            // 清空现有列表
+            roleList.innerHTML = '';
+            mobileRoleList.innerHTML = '';
+            
+            // 更新当前角色
+            if (response.current_role) {
+                document.getElementById('current-role-name').textContent = response.current_role.name;
+                document.getElementById('current-role-description').textContent = response.current_role.description;
+                document.querySelector('.role-toggle .current-role-name').textContent = response.current_role.name;
+            }
+            
+            // 填充角色列表
+            Object.entries(response.roles).forEach(([id, role]) => {
+                // PC端角色项
+                const roleItem = document.createElement('div');
+                roleItem.className = 'role-item';
+                roleItem.dataset.id = id;
+                if (id === response.current_role?.role_id) {
+                    roleItem.classList.add('active');
+                }
+                
+                roleItem.innerHTML = `
+                    <div class="role-name">${role.name}</div>
+                    <div class="role-description">${role.description || ''}</div>
+                `;
+                
+                roleItem.onclick = () => {
+                    switchRole(id);
+                    toggleRoleList();
+                };
+                
+                roleList.appendChild(roleItem);
+                
+                // 移动端角色项
+                const mobileRoleItem = document.createElement('div');
+                mobileRoleItem.className = 'mobile-role-item';
+                mobileRoleItem.dataset.id = id;
+                if (id === response.current_role?.role_id) {
+                    mobileRoleItem.classList.add('active');
+                }
+                
+                mobileRoleItem.innerHTML = `
+                    <div class="role-name">${role.name}</div>
+                    <div class="role-description">${role.description || ''}</div>
+                `;
+                
+                mobileRoleItem.onclick = () => {
+                    switchRole(id);
+                    toggleMobileRoleSelector();
+                };
+                
+                mobileRoleList.appendChild(mobileRoleItem);
+            });
+        }
+    } catch (error) {
+        console.error('加载角色列表失败:', error);
+        showMessage('加载角色列表失败，请刷新页面重试', 'error');
+    }
+}
+
+// 切换角色
+async function switchRole(roleId) {
+    try {
+        console.log('开始切换角色:', roleId);
+        if (!roleId) {
+            console.error('角色ID为空');
+            return;
+        }
+        
+        const response = await fetchWithRetry(`/api/roles/${roleId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken
+            }
+        });
+        
+        console.log('切换角色响应:', response);
+        
+        if (response.status === 'success') {
+            // 更新当前角色
+            currentRole = response.role;
+            
+            // 更新PC端显示
+            const currentRoleNameEl = document.getElementById('current-role-name');
+            const currentRoleDescEl = document.getElementById('current-role-description');
+            if (currentRoleNameEl) currentRoleNameEl.textContent = currentRole.name;
+            if (currentRoleDescEl) currentRoleDescEl.textContent = currentRole.description;
+            
+            // 更新移动端显示
+            const mobileRoleNameEl = document.querySelector('.role-toggle .current-role-name');
+            if (mobileRoleNameEl) mobileRoleNameEl.textContent = currentRole.name;
+            
+            // 更新角色列表选中状态
+            document.querySelectorAll('.role-item, .mobile-role-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.id === roleId);
+            });
+            
+            // 关闭角色选择器
+            if (window.innerWidth <= 768) {
+                toggleMobileRoleSelector();
+            } else {
+                toggleRoleList();
+            }
+            
+            showMessage(`已切换到${currentRole.name}`, 'success');
+        } else {
+            throw new Error(response.message || '切换角色失败');
+        }
+    } catch (error) {
+        console.error('切换角色失败:', error);
+        showMessage('切换角色失败: ' + error.message, 'error');
+    }
+}
+
+// 切换侧边栏显示
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sessions-sidebar');
+    sidebar.classList.toggle('show');
+}
+
+// 切换角色选择器显示
+function toggleRoleSelector() {
+    const selector = document.querySelector('.role-selector');
+    selector.classList.toggle('show');
+}
+</script>
+
+<style>
+/* 聊天消息样式 */
+.message {
+    margin: 10px;
+    padding: 12px;
+    border-radius: 8px;
+    max-width: 85%;
+    clear: both;
+}
+
+.user-message {
+    float: right;
+    background-color: #e3f2fd;
+    margin-left: 15%;
+}
+
+.assistant-message {
+    float: left;
+    background-color: #f5f5f5;
+    margin-right: 15%;
+}
+
+.message-content {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.role-label {
+    font-size: 0.8em;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.message-text {
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 1.5;
+}
+
+#chat-messages {
+    display: flex;
+    flex-direction: column;
+    padding: 15px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+#chat-messages::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+/* 移动端顶部栏 */
+.mobile-header {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    padding: 0 15px;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 1000;
+}
+
+.menu-toggle, .role-toggle {
+    background: none;
+    border: none;
+    font-size: 24px;
+    padding: 8px;
+    cursor: pointer;
+}
+
+.current-session-title {
+    flex: 1;
+    text-align: center;
+    font-weight: 500;
+    margin: 0 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 角色选择器样式 */
+.role-selector {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    background: #fff;
+}
+
+.role-selector-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.role-selector-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #666;
+}
+
+.toggle-roles-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.toggle-roles-btn:hover {
+    background: #f5f5f5;
+}
+
+.toggle-roles-btn .arrow {
+    font-size: 12px;
+    transition: transform 0.3s;
+}
+
+.role-list {
+    margin-top: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.role-item {
+    padding: 12px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.role-item:last-child {
+    border-bottom: none;
+}
+
+.role-item:hover {
+    background: #f5f5f5;
+}
+
+.role-item.active {
+    background: #e3f2fd;
+}
+
+.role-item .role-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.role-item .role-description {
+    font-size: 13px;
+    color: #666;
+}
+
+/* 响应式布局相关样式 */
+@media screen and (max-width: 768px) {
+    .mobile-header {
+        display: flex;
+    }
+    
+    .message {
+        margin: 8px;
+        padding: 10px;
+        max-width: 90%;
+    }
+    
+    .user-message {
+        margin-left: 10%;
+    }
+    
+    .assistant-message {
+        margin-right: 10%;
+    }
+
+    .message-text {
+        font-size: 14px;
+    }
+
+    .chat-page {
+        flex-direction: column;
+        height: 100vh;
+        padding-top: 50px;
+    }
+    
+    .sessions-sidebar {
+        position: fixed;
+        top: 50px;
+        bottom: 0;
+        left: -100%;
+        width: 100%;
+        height: calc(100% - 50px);
+        background: #fff;
+        transition: left 0.3s ease;
+        z-index: 998;
+    }
+    
+    .sessions-sidebar.show {
+        left: 0;
+    }
+
+    .chat-container {
+        width: 100%;
+        height: calc(100vh - 50px);
+    }
+
+    .role-selector {
+        display: none;
+    }
+
+    /* 移动端角色选择器样式 */
+    .mobile-role-selector {
+        position: fixed;
+        top: 50px;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border-bottom: 1px solid #ddd;
+        z-index: 999;
+        transform: translateY(-100%);
+        transition: transform 0.3s ease;
+    }
+
+    .mobile-role-selector.show {
+        transform: translateY(0);
+    }
+
+    .mobile-session-actions {
+        display: flex;
+        justify-content: flex-end;
+    }
+}
+
+/* 移动端角色切换按钮 */
+.role-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #f0f2f5;
+    border: none;
+    border-radius: 16px;
+    font-size: 14px;
+    color: #333;
+    cursor: pointer;
+}
+
+.role-toggle .current-role-name {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.role-toggle .role-icon {
+    font-size: 18px;
+    transition: transform 0.3s;
+}
+
+/* 移动端角色选择器样式 */
+.mobile-role-selector {
+    position: fixed;
+    top: 50px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1001;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s;
+}
+
+.mobile-role-selector.show {
+    opacity: 1;
+    visibility: visible;
+}
+
+.mobile-role-header {
+    background: #fff;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #eee;
+}
+
+.mobile-role-header h3 {
+    margin: 0;
+    font-size: 16px;
+}
+
+.close-btn {
+    border: none;
+    background: none;
+    font-size: 24px;
+    color: #666;
+    padding: 0 8px;
+    cursor: pointer;
+}
+
+.mobile-role-list {
+    background: #fff;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.mobile-role-item {
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mobile-role-item.active {
+    background: #e3f2fd;
+}
+
+.mobile-role-item .role-name {
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.mobile-role-item .role-description {
+    font-size: 13px;
+    color: #666;
+}
+
+/* 移动端会话操作按钮 */
+.mobile-session-actions {
+    display: none;
+    padding: 10px;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
+    gap: 10px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    color: #333;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.action-btn:hover {
+    background: #f5f5f5;
+}
+
+.action-btn .icon {
+    font-size: 16px;
+}
+
+/* 移动端导航菜单 */
+.mobile-nav {
+    display: none;
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+    gap: 15px;
+}
+
+.mobile-nav .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    background: #f5f5f5;
+    color: #333;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.mobile-nav .nav-item .icon {
+    font-size: 18px;
+}
+
+@media screen and (max-width: 768px) {
+    .mobile-nav {
+        display: flex;
+    }
+
+    .chat-container {
+        width: 100%;
+        height: calc(100vh - 50px);
+        padding-bottom: env(safe-area-inset-bottom);
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .chat-input {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: #fff;
+        padding: 10px 15px;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+        border-top: 1px solid #ddd;
+        z-index: 100;
+        display: flex;
+        gap: 10px;
+    }
+    
+    #chat-messages {
+        flex: 1;
+        padding-bottom: calc(70px + env(safe-area-inset-bottom));  /* 为输入框和安全区域留出空间 */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .sessions-sidebar {
+        position: fixed;
+        top: 50px;
+        bottom: 0;
+        left: -100%;
+        width: 100%;
+        height: calc(100vh - 50px);
+        background: #fff;
+        transition: left 0.3s ease;
+        z-index: 998;
+        display: flex;
+        flex-direction: column;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+    
+    .sessions-list {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 20px;  /* 为底部添加一些空间 */
+    }
+}
+
+/* iOS 安全区域适配 */
+@supports (padding: max(0px)) {
+    .mobile-header {
+        padding-top: max(0px, env(safe-area-inset-top));
+        height: calc(50px + env(safe-area-inset-top));
+    }
+    
+    .chat-page {
+        padding-top: calc(50px + env(safe-area-inset-top));
+    }
+    
+    .sessions-sidebar {
+        top: calc(50px + env(safe-area-inset-top));
+        height: calc(100vh - 50px - env(safe-area-inset-top));
+    }
+    
+    .chat-input {
+        padding-bottom: max(15px, env(safe-area-inset-bottom));
+    }
+}
+</style>
+{% endblock %} 

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}管理面板{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <div class="admin-sidebar">
+        <div class="admin-header">
+            <h2>管理面板</h2>
+        </div>
+        <div class="admin-nav">
+            <a href="{{ url_for('admin_users') }}" class="nav-item">
+                <span class="nav-icon">👥</span>
+                用户管理
+            </a>
+            <a href="{{ url_for('admin_announcements') }}" class="nav-item">
+                <span class="nav-icon">📢</span>
+                公告管理
+            </a>
+            <a href="{{ url_for('admin_surveys') }}" class="nav-item">
+                <span class="nav-icon">📝</span>
+                问卷管理
+            </a>
+            <a href="{{ url_for('admin_roles') }}" class="nav-item">
+                <span class="nav-icon">🎭</span>
+                角色管理
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-content">
+        <div class="dashboard">
+            <div class="stat-card">
+                <div class="stat-title">用户总数</div>
+                <div class="stat-value">{{ stats.total_users }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">会话总数</div>
+                <div class="stat-value">{{ stats.total_sessions }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">消息总数</div>
+                <div class="stat-value">{{ stats.total_messages }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">公告总数</div>
+                <div class="stat-value">{{ stats.total_announcements }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-title">角色总数</div>
+                <div class="stat-value">{{ stats.total_roles }}</div>
+            </div>
+        </div>
+
+        <div class="data-section">
+            <h3>最近注册用户</h3>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>用户名</th>
+                        <th>邮箱</th>
+                        <th>注册时间</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in recent_users %}
+                    <tr>
+                        <td>{{ user.username }}</td>
+                        <td>{{ user.email }}</td>
+                        <td>{{ user.created_at }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

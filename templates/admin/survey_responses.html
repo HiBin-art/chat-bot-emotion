@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}问卷回复{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <div class="admin-sidebar">
+        <div class="admin-header">
+            <h2>管理面板</h2>
+        </div>
+        <div class="admin-nav">
+            <a href="{{ url_for('admin_users') }}" class="nav-item">
+                <span class="nav-icon">👥</span>
+                用户管理
+            </a>
+            <a href="{{ url_for('admin_announcements') }}" class="nav-item">
+                <span class="nav-icon">📢</span>
+                公告管理
+            </a>
+            <a href="{{ url_for('admin_surveys') }}" class="nav-item active">
+                <span class="nav-icon">📝</span>
+                问卷管理
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-content">
+        <div class="content-header">
+            <h2>{{ survey.title }} - 回复列表</h2>
+            <div class="header-actions">
+                <button onclick="exportToExcel()" class="btn-primary">导出Excel</button>
+                <a href="{{ url_for('admin_surveys') }}" class="btn-secondary">返回列表</a>
+            </div>
+        </div>
+
+        <div class="survey-info">
+            <p>{{ survey.description }}</p>
+            <div class="meta-info">
+                <span>创建时间：{{ survey.created_at }}</span>
+                <span>回复数量：{{ responses|length }}</span>
+                <span class="status-badge {{ survey.status }}">
+                    {{ {'draft': '草稿', 'published': '已发布', 'closed': '已关闭'}[survey.status] }}
+                </span>
+            </div>
+        </div>
+
+        <div class="responses-section">
+            {% for response in responses %}
+            <div class="response-card">
+                <div class="response-header">
+                    <span class="response-user">{{ response.username }}</span>
+                    <span class="response-time">{{ response.submitted_at }}</span>
+                </div>
+                
+                <div class="response-content">
+                    {% for answer in response.answers %}
+                    <div class="answer-item">
+                        <div class="question-text">{{ answer.question_text }}</div>
+                        <div class="answer-text">
+                            {% if answer.question_type == 'text' %}
+                                {{ answer.answer_text }}
+                            {% else %}
+                                {% for option in answer.answer_options %}
+                                    <span class="selected-option">{{ option }}</span>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <p>暂无回复数据</p>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if pages > 1 %}
+        <div class="pagination">
+            {% for p in range(1, pages + 1) %}
+            <a href="?page={{ p }}" class="page-link {% if p == page %}active{% endif %}">{{ p }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function exportToExcel() {
+    window.location.href = "{{ url_for('export_survey_responses', id=survey.id) }}";
+}
+</script>
+
+<style>
+.survey-info {
+    background: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    margin-bottom: 2em;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.meta-info {
+    display: flex;
+    gap: 2em;
+    margin-top: 1em;
+    color: #666;
+}
+
+.response-card {
+    background: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    margin-bottom: 1.5em;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.response-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1em;
+    padding-bottom: 0.5em;
+    border-bottom: 1px solid #eee;
+}
+
+.response-user {
+    font-weight: bold;
+    color: #2563eb;
+}
+
+.response-time {
+    color: #666;
+}
+
+.answer-item {
+    margin-bottom: 1em;
+    padding-bottom: 1em;
+    border-bottom: 1px solid #eee;
+}
+
+.answer-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.question-text {
+    font-weight: bold;
+    margin-bottom: 0.5em;
+    color: #1f2937;
+}
+
+.answer-text {
+    color: #4b5563;
+}
+
+.selected-option {
+    display: inline-block;
+    background: #f3f4f6;
+    padding: 0.25em 0.75em;
+    border-radius: 9999px;
+    margin-right: 0.5em;
+    margin-bottom: 0.5em;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1em;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3em;
+    background: white;
+    border-radius: 8px;
+    color: #6b7280;
+}
+</style>
+{% endblock %} 

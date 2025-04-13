@@ -1,0 +1,354 @@
+/* 管理面板通用布局 */
+.admin-page {
+    display: flex;
+    min-height: 100vh;
+    background: #f3f4f6;
+}
+
+/* 侧边栏 */
+.admin-sidebar {
+    width: 250px;
+    background: white;
+    box-shadow: 1px 0 3px rgba(0,0,0,0.1);
+    flex-shrink: 0;
+}
+
+.admin-header {
+    padding: 1.5em;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-header h2 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.admin-nav {
+    padding: 1em 0;
+}
+
+.nav-item {
+    display: flex;
+    align-items: center;
+    padding: 0.75em 1.5em;
+    color: #4b5563;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.nav-item:hover {
+    background: #f9fafb;
+    color: #2563eb;
+}
+
+.nav-item.active {
+    background: #eff6ff;
+    color: #2563eb;
+    border-right: 3px solid #2563eb;
+}
+
+.nav-icon {
+    margin-right: 0.75em;
+    font-size: 1.25em;
+}
+
+/* 主内容区 */
+.admin-content {
+    flex: 1;
+    padding: 2em;
+    overflow-y: auto;
+}
+
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2em;
+}
+
+.content-header h2 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.header-actions {
+    display: flex;
+    gap: 1em;
+}
+
+/* 卡片样式 */
+.card {
+    background: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 1.5em;
+}
+
+/* 表格样式 */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.data-table th,
+.data-table td {
+    padding: 1em;
+    text-align: left;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.data-table th {
+    background: #f8fafc;
+    font-weight: 600;
+    color: #4b5563;
+}
+
+.data-table tr:hover {
+    background: #f9fafb;
+}
+
+/* 按钮样式 */
+.btn-primary {
+    background: #2563eb;
+    color: white;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.btn-secondary {
+    background: #f3f4f6;
+    color: #4b5563;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    border: 1px solid #d1d5db;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: #e5e7eb;
+    color: #1f2937;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: white;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    transition: background-color 0.2s;
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+
+/* 表单样式 */
+.form-group {
+    margin-bottom: 1.5em;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5em;
+    color: #4b5563;
+    font-weight: 500;
+}
+
+.form-control {
+    width: 100%;
+    padding: 0.5em;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    font-size: 1em;
+}
+
+.form-control:focus {
+    outline: none;
+    border-color: #2563eb;
+    box-shadow: 0 0 0 2px rgba(37,99,235,0.2);
+}
+
+/* 状态标签 */
+.status-badge {
+    padding: 0.25em 0.75em;
+    border-radius: 9999px;
+    font-size: 0.875em;
+    font-weight: 500;
+}
+
+.status-badge.draft {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.status-badge.published {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.closed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+/* 图表容器 */
+.chart-container {
+    min-height: 200px;
+    position: relative;
+}
+
+/* 统计卡片 */
+.stat-card {
+    background: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #2563eb;
+    margin-top: 0.5em;
+}
+
+/* 分页 */
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5em;
+    margin-top: 2em;
+}
+
+.page-link {
+    padding: 0.5em 1em;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    color: #4b5563;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.page-link:hover {
+    background: #f3f4f6;
+}
+
+.page-link.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+    .admin-page {
+        flex-direction: column;
+    }
+    
+    .admin-sidebar {
+        width: 100%;
+    }
+    
+    .admin-content {
+        padding: 1em;
+    }
+    
+    .content-header {
+        flex-direction: column;
+        gap: 1em;
+    }
+    
+    .header-actions {
+        width: 100%;
+        justify-content: flex-start;
+    }
+}
+
+/* 角色管理页面样式 */
+.roles-container {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    margin: 20px;
+    padding: 20px;
+}
+
+.roles-container h2 {
+    margin-bottom: 20px;
+    color: #2d3748;
+}
+
+.btn-primary {
+    background-color: #4299e1;
+    color: white;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-primary:hover {
+    background-color: #3182ce;
+}
+
+.btn-danger {
+    background-color: #f56565;
+    color: white;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background-color: #e53e3e;
+}
+
+.roles-table {
+    margin-top: 20px;
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.roles-table th,
+.roles-table td {
+    padding: 12px;
+    border: 1px solid #e2e8f0;
+    text-align: left;
+}
+
+.roles-table th {
+    background-color: #f7fafc;
+    font-weight: 600;
+}
+
+.roles-table tr:hover {
+    background-color: #f7fafc;
+} 

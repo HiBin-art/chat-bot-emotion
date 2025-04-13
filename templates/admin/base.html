@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="admin-page">
+    <div class="admin-sidebar">
+        <div class="admin-header">
+            <h2>管理面板</h2>
+        </div>
+        <div class="admin-nav">
+            <a href="{{ url_for('admin_users') }}" class="nav-item {% if request.endpoint == 'admin_users' %}active{% endif %}">
+                <span class="nav-icon">👥</span>
+                用户管理
+            </a>
+            <a href="{{ url_for('admin_announcements') }}" class="nav-item {% if request.endpoint == 'admin_announcements' %}active{% endif %}">
+                <span class="nav-icon">📢</span>
+                公告管理
+            </a>
+            <a href="{{ url_for('admin_surveys') }}" class="nav-item {% if request.endpoint == 'admin_surveys' %}active{% endif %}">
+                <span class="nav-icon">📝</span>
+                问卷管理
+            </a>
+        </div>
+    </div>
+
+    <div class="admin-content">
+        {% block admin_content %}{% endblock %}
+    </div>
+</div>
+{% endblock %} 

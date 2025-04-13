@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+{% block title %}{{ announcement.title }}{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <div class="header-left">
+            <a href="{{ url_for('view_announcements') }}" class="btn-back">返回</a>
+            <h2>{{ announcement.title }}</h2>
+        </div>
+        {% if session.role == 'admin' %}
+        <div class="header-actions">
+            <a href="{{ url_for('edit_announcement', id=announcement.id) }}" class="btn-secondary">编辑</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="announcement-detail card">
+        <div class="announcement-meta">
+            <span>发布者：{{ announcement.author }}</span>
+            <span>发布时间：{{ announcement.created_at }}</span>
+            <span>更新时间：{{ announcement.updated_at }}</span>
+            <span class="status-badge {{ announcement.status }}">
+                {{ {'draft': '草稿', 'published': '已发布', 'archived': '已归档'}[announcement.status] }}
+            </span>
+        </div>
+        
+        <div class="announcement-content">
+            {{ announcement.content }}
+        </div>
+    </div>
+</div>
+
+<style>
+.page-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2em;
+}
+
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2em;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+}
+
+.btn-back {
+    color: #4b5563;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+}
+
+.btn-back:hover {
+    color: #1f2937;
+}
+
+.announcement-detail {
+    background: white;
+    padding: 2em;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.announcement-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2em;
+    color: #6b7280;
+    margin-bottom: 2em;
+    font-size: 0.875em;
+}
+
+.announcement-content {
+    color: #1f2937;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+.status-badge {
+    padding: 0.25em 0.75em;
+    border-radius: 9999px;
+    font-size: 0.875em;
+}
+
+.status-badge.draft {
+    background: #f3f4f6;
+    color: #6b7280;
+}
+
+.status-badge.published {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.archived {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+@media (max-width: 640px) {
+    .page-container {
+        padding: 1em;
+    }
+    
+    .announcement-meta {
+        flex-direction: column;
+        gap: 0.5em;
+    }
+}
+</style>
+{% endblock %} 

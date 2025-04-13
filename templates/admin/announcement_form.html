@@ -1,0 +1,71 @@
+{% extends "admin/base.html" %}
+{% block title %}{{ '编辑公告' if announcement else '创建公告' }}{% endblock %}
+
+{% block admin_content %}
+<div class="content-header">
+    <h2>{{ '编辑公告' if announcement else '创建公告' }}</h2>
+    <div class="header-actions">
+        <button onclick="history.back()" class="btn-secondary">返回</button>
+        <button onclick="saveDraft()" class="btn-secondary">保存草稿</button>
+        <button onclick="saveAndPublish()" class="btn-primary">发布公告</button>
+    </div>
+</div>
+
+<div class="card">
+    <form id="announcementForm" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="title">公告标题</label>
+            <input type="text" id="title" name="title" class="form-control" required 
+                   value="{{ announcement.title if announcement else '' }}"
+                   placeholder="请输入公告标题">
+        </div>
+        
+        <div class="form-group">
+            <label for="content">公告内容</label>
+            <textarea id="content" name="content" class="form-control" rows="10" required
+                      placeholder="请输入公告内容">{{ announcement.content if announcement else '' }}</textarea>
+        </div>
+    </form>
+</div>
+
+<script>
+function saveAnnouncement(status) {
+    const form = document.getElementById('announcementForm');
+    const formData = {
+        title: form.title.value,
+        content: form.content.value,
+        status: status
+    };
+    
+    fetch(window.location.pathname, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            window.location.href = '{{ url_for("admin_announcements") }}';
+        } else {
+            alert('保存失败：' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('保存失败');
+    });
+}
+
+function saveDraft() {
+    saveAnnouncement('draft');
+}
+
+function saveAndPublish() {
+    saveAnnouncement('published');
+}
+</script>
+{% endblock %} 

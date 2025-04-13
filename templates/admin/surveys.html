@@ -1,0 +1,77 @@
+{% extends "admin/base.html" %}
+{% block title %}问卷管理{% endblock %}
+
+{% block admin_content %}
+<div class="content-header">
+    <h2>问卷管理</h2>
+    <div class="header-actions">
+        <a href="{{ url_for('create_survey') }}" class="btn-primary">创建新问卷</a>
+    </div>
+</div>
+
+<div class="surveys-list">
+    {% for survey in surveys %}
+    <div class="card">
+        <div class="survey-header">
+            <h3>{{ survey.title }}</h3>
+            <span class="status-badge {{ survey.status }}">
+                {{ {'draft': '草稿', 'published': '已发布', 'closed': '已关闭'}[survey.status] }}
+            </span>
+        </div>
+        <div class="survey-meta">
+            <span>创建者：{{ survey.author }}</span>
+            <span>创建时间：{{ survey.created_at }}</span>
+            <span>回复数：{{ survey.response_count }}</span>
+        </div>
+        {% if survey.description %}
+        <div class="survey-description">
+            {{ survey.description }}
+        </div>
+        {% endif %}
+        <div class="survey-actions">
+            <a href="{{ url_for('edit_survey', id=survey.id) }}" class="btn-secondary">编辑</a>
+            <a href="{{ url_for('view_survey_responses', id=survey.id) }}" class="btn-secondary">查看回复</a>
+            <a href="{{ url_for('survey_analysis', id=survey.id) }}" class="btn-secondary">数据分析</a>
+            <button onclick="deleteSurvey({{ survey.id }})" class="btn-danger">删除</button>
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>暂无问卷</p>
+    </div>
+    {% endfor %}
+</div>
+
+{% if pages > 1 %}
+<div class="pagination">
+    {% for p in range(1, pages + 1) %}
+    <a href="?page={{ p }}" class="page-link {% if p == page %}active{% endif %}">{{ p }}</a>
+    {% endfor %}
+</div>
+{% endif %}
+
+<script>
+function deleteSurvey(id) {
+    if (confirm('确定要删除这个问卷吗？')) {
+        fetch(`/api/surveys/${id}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('删除失败：' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('删除失败');
+        });
+    }
+}
+</script>
+{% endblock %} 

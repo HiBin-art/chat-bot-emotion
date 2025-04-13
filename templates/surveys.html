@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}问卷列表{% endblock %}
+{% block content %}
+<div class="surveys-page">
+    <div class="page-header">
+        <h2>问卷列表</h2>
+    </div>
+
+    <div class="surveys-list">
+        {% for survey in surveys %}
+        <div class="survey-card">
+            <div class="survey-header">
+                <h3>{{ survey.title }}</h3>
+                <span class="status-badge {{ survey.status }}">
+                    {{ {'draft': '草稿', 'published': '已发布', 'closed': '已关闭'}[survey.status] }}
+                </span>
+            </div>
+            <div class="survey-meta">
+                <span>创建者：{{ survey.author }}</span>
+                <span>创建时间：{{ survey.created_at }}</span>
+                <span>已收集：{{ survey.response_count }} 份答卷</span>
+            </div>
+            {% if survey.description %}
+            <div class="survey-description">
+                {{ survey.description }}
+            </div>
+            {% endif %}
+            <div class="survey-actions">
+                {% if survey.status == 'published' %}
+                <a href="{{ url_for('view_survey', id=survey.id) }}" class="btn-primary">开始填写</a>
+                {% else %}
+                <button class="btn-disabled" disabled>{{ {'draft': '未发布', 'closed': '已结束'}[survey.status] }}</button>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>暂无可用的问卷</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if pages > 1 %}
+    <div class="pagination">
+        {% for p in range(1, pages + 1) %}
+        <a href="?page={{ p }}" class="page-link {% if p == page %}active{% endif %}">{{ p }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

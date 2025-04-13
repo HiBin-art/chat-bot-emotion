@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>{% block title %}情感对话机器人{% endblock %}</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% if 'admin' in request.endpoint %}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+    {% endif %}
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <nav>
+        {% if session.user_id %}
+            <a href="{{ url_for('chat') }}">聊天</a>
+            <a href="{{ url_for('view_announcements') }}">公告</a>
+            <a href="{{ url_for('view_surveys') }}">问卷</a>
+            {% if session.role == 'admin' %}
+                <a href="{{ url_for('admin_panel') }}">管理面板</a>
+            {% endif %}
+            <a href="{{ url_for('logout') }}">退出 ({{ session.username }})</a>
+        {% else %}
+            <a href="{{ url_for('login') }}">登录</a>
+            <a href="{{ url_for('register') }}">注册</a>
+        {% endif %}
+    </nav>
+    
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for message in messages %}
+            <div class="flash-message">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+    
+    {% block content %}{% endblock %}
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

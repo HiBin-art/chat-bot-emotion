@@ -1,0 +1,320 @@
+{% extends "admin/base.html" %}
+{% block title %}问卷分析 - {{ survey.title }}{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block admin_content %}
+<div class="content-header">
+    <div class="header-left">
+        <a href="{{ url_for('admin_surveys') }}" class="btn-back">返回</a>
+        <h2>{{ survey.title }}</h2>
+    </div>
+    <div class="header-actions">
+        <a href="{{ url_for('export_survey_responses', id=survey.id) }}" class="btn-primary">导出数据</a>
+    </div>
+</div>
+
+<div class="analysis-container">
+    <!-- 总览数据 -->
+    <div class="stats-overview card">
+        <div class="stat-item">
+            <div class="stat-value">{{ stats.total_responses }}</div>
+            <div class="stat-label">总回复数</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">{{ "%.1f"|format(stats.completion_rate * 100) }}%</div>
+            <div class="stat-label">完成率</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">{{ stats.avg_time }}分钟</div>
+            <div class="stat-label">平均完成时间</div>
+        </div>
+    </div>
+
+    <!-- 每日回复趋势 -->
+    <div class="card">
+        <h3>回复趋势</h3>
+        <canvas id="responseTrend"></canvas>
+    </div>
+
+    <!-- 问题分析 -->
+    <div class="questions-analysis">
+        {% for question in stats.questions %}
+        <div class="question-card card">
+            <h3>{{ loop.index }}. {{ question.question_text }}</h3>
+            
+            {% if question.question_type in ['single_choice', 'multiple_choice'] %}
+            <!-- 选择题分析（使用饼图） -->
+            <div class="chart-container">
+                <canvas id="question{{ question.question_id }}Chart"></canvas>
+            </div>
+            <div class="option-stats">
+                {% for option in question.option_counts %}
+                <div class="option-stat">
+                    <span class="option-text">{{ option.option_text }}</span>
+                    <div class="stat-bar">
+                        <div class="bar" style="width: {{ (option.count / stats.total_responses * 100)|round|int }}%"></div>
+                        <span class="count">{{ option.count }}票 ({{ "%.1f"|format(option.count / stats.total_responses * 100) }}%)</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% elif question.question_type == 'text' %}
+            <!-- 文本题分析 -->
+            <div class="text-responses">
+                <div class="response-stats">
+                    <div class="stat-item">
+                        <div class="stat-value">{{ question.response_count }}</div>
+                        <div class="stat-label">回答数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value">{{ question.avg_length }}</div>
+                        <div class="stat-label">平均字数</div>
+                    </div>
+                </div>
+                <div class="recent-responses">
+                    <h4>最新回复</h4>
+                    {% for answer in question.recent_answers %}
+                    <div class="text-response">
+                        <div class="response-content">{{ answer.answer_text }}</div>
+                        <div class="response-meta">
+                            <span>{{ answer.username }}</span>
+                            <span>{{ answer.submitted_at }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script>
+// 配置图表主题
+Chart.defaults.color = '#4b5563';
+Chart.defaults.font.family = 'system-ui, -apple-system, sans-serif';
+
+// 绘制回复趋势图
+const trendCtx = document.getElementById('responseTrend').getContext('2d');
+new Chart(trendCtx, {
+    type: 'line',
+    data: {
+        labels: {{ stats.daily_responses|map(attribute='date')|list|tojson }},
+        datasets: [{
+            label: '每日回复数',
+            data: {{ stats.daily_responses|map(attribute='count')|list|tojson }},
+            borderColor: '#2563eb',
+            backgroundColor: '#dbeafe',
+            fill: true,
+            tension: 0.4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true,
+                ticks: {
+                    stepSize: 1
+                }
+            }
+        }
+    }
+});
+
+// 为每个选择题绘制饼图
+{% for question in stats.questions %}
+{% if question.question_type in ['single_choice', 'multiple_choice'] %}
+const q{{ question.question_id }}Ctx = document.getElementById('question{{ question.question_id }}Chart').getContext('2d');
+new Chart(q{{ question.question_id }}Ctx, {
+    type: 'pie',
+    data: {
+        labels: {{ question.option_counts|map(attribute='option_text')|list|tojson }},
+        datasets: [{
+            data: {{ question.option_counts|map(attribute='count')|list|tojson }},
+            backgroundColor: [
+                '#60a5fa',
+                '#34d399',
+                '#fbbf24',
+                '#f87171',
+                '#a78bfa',
+                '#f472b6',
+                '#6ee7b7',
+                '#93c5fd'
+            ]
+        }]
+    },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                position: 'right',
+                labels: {
+                    padding: 20,
+                    font: {
+                        size: 12
+                    }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        const value = context.raw;
+                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                        const percentage = ((value / total) * 100).toFixed(1);
+                        return `${context.label}: ${value}票 (${percentage}%)`;
+                    }
+                }
+            }
+        }
+    }
+});
+{% endif %}
+{% endfor %}
+</script>
+
+<style>
+.analysis-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5em;
+    padding: 1em;
+}
+
+.stats-overview {
+    display: flex;
+    justify-content: space-around;
+    padding: 2em;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 2em;
+    font-weight: bold;
+    color: #2563eb;
+}
+
+.stat-label {
+    color: #6b7280;
+    margin-top: 0.5em;
+}
+
+.question-card {
+    background: white;
+    padding: 2em;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.question-card h3 {
+    color: #1f2937;
+    margin-bottom: 1.5em;
+    font-size: 1.2em;
+}
+
+.chart-container {
+    height: 300px;
+    margin: 2em 0;
+}
+
+.option-stats {
+    margin-top: 2em;
+}
+
+.option-stat {
+    margin-bottom: 1em;
+}
+
+.option-text {
+    display: block;
+    margin-bottom: 0.5em;
+    color: #4b5563;
+}
+
+.stat-bar {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+}
+
+.bar {
+    height: 24px;
+    background: #dbeafe;
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.count {
+    color: #6b7280;
+    font-size: 0.875em;
+    min-width: 120px;
+}
+
+.text-responses {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5em;
+}
+
+.response-stats {
+    display: flex;
+    justify-content: space-around;
+    padding: 1.5em;
+    background: #f3f4f6;
+    border-radius: 8px;
+}
+
+.recent-responses {
+    display: flex;
+    flex-direction: column;
+    gap: 1em;
+}
+
+.text-response {
+    padding: 1em;
+    background: #f9fafb;
+    border-radius: 4px;
+}
+
+.response-content {
+    color: #1f2937;
+    margin-bottom: 0.5em;
+    white-space: pre-wrap;
+}
+
+.response-meta {
+    display: flex;
+    justify-content: space-between;
+    color: #6b7280;
+    font-size: 0.875em;
+}
+
+@media (max-width: 768px) {
+    .stats-overview {
+        flex-direction: column;
+        gap: 1.5em;
+    }
+    
+    .chart-container {
+        height: 400px;
+    }
+}
+</style>
+{% endblock %} 

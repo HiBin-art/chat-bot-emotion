@@ -1,0 +1,232 @@
+{% extends "base.html" %}
+{% block title %}{{ survey.title }}{% endblock %}
+{% block content %}
+<div class="survey-container">
+    <h2>{{ survey.title }}</h2>
+    <p class="survey-description">{{ survey.description }}</p>
+    
+    <div id="message" class="message" style="display: none;"></div>
+    
+    <form id="survey-form" onsubmit="event.preventDefault(); submitSurvey();">
+        {% for question in survey.questions %}
+        <div class="question" 
+             data-question-id="{{ question.id }}"
+             data-question-type="{{ question.question_type }}"
+             data-required="{{ question.required }}">
+            <div class="question-text">
+                {{ loop.index }}. {{ question.question_text }}
+                {% if question.required %}
+                <span class="required">*</span>
+                {% endif %}
+            </div>
+            
+            {% if question.question_type == 'text' %}
+            <textarea name="q{{ question.id }}" rows="3" class="text-input"></textarea>
+            
+            {% elif question.question_type == 'single_choice' %}
+            <div class="options">
+                {% for option in question.options %}
+                <label class="option">
+                    <input type="radio" name="q{{ question.id }}" value="{{ option }}">
+                    <span>{{ option }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            
+            {% elif question.question_type == 'multiple_choice' %}
+            <div class="options">
+                {% for option in question.options %}
+                <label class="option">
+                    <input type="checkbox" name="q{{ question.id }}" value="{{ option }}">
+                    <span>{{ option }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+        
+        <div class="form-actions">
+            <button type="submit" class="btn-primary">提交问卷</button>
+        </div>
+    </form>
+</div>
+
+<script>
+const surveyId = {{ survey.id }};
+
+// 提交问卷
+async function submitSurvey() {
+    try {
+        // 收集所有答案
+        const answers = [];
+        const questions = document.querySelectorAll('.question');
+        
+        for (const question of questions) {
+            const questionId = parseInt(question.dataset.questionId);
+            const questionType = question.dataset.questionType;
+            const required = question.dataset.required === 'true';
+            
+            let answer = {
+                question_id: questionId
+            };
+            
+            if (questionType === 'text') {
+                // 文本题
+                const textInput = question.querySelector('textarea');
+                const text = textInput.value.trim();
+                
+                if (required && !text) {
+                    throw new Error(`请回答问题: ${question.querySelector('.question-text').textContent}`);
+                }
+                
+                answer.text = text;
+                
+            } else if (questionType === 'single_choice') {
+                // 单选题
+                const selectedOption = question.querySelector('input[type="radio"]:checked');
+                
+                if (required && !selectedOption) {
+                    throw new Error(`请选择问题: ${question.querySelector('.question-text').textContent}`);
+                }
+                
+                if (selectedOption) {
+                    answer.options = [selectedOption.value];
+                }
+                
+            } else if (questionType === 'multiple_choice') {
+                // 多选题
+                const selectedOptions = question.querySelectorAll('input[type="checkbox"]:checked');
+                const options = Array.from(selectedOptions).map(opt => opt.value);
+                
+                if (required && options.length === 0) {
+                    throw new Error(`请选择问题: ${question.querySelector('.question-text').textContent}`);
+                }
+                
+                answer.options = options;
+            }
+            
+            answers.push(answer);
+        }
+        
+        // 发送请求
+        const response = await fetch(`/api/surveys/${surveyId}/submit`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify({ answers: answers })
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            showMessage('提交成功！', 'success');
+            // 延迟后返回列表页
+            setTimeout(() => {
+                window.location.href = '/surveys';
+            }, 1500);
+        } else {
+            throw new Error(result.message || '提交失败');
+        }
+        
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+// 显示消息提示
+function showMessage(message, type = 'info') {
+    const messageDiv = document.getElementById('message');
+    messageDiv.textContent = message;
+    messageDiv.className = `message ${type}`;
+    messageDiv.style.display = 'block';
+    
+    // 3秒后自动隐藏
+    setTimeout(() => {
+        messageDiv.style.display = 'none';
+    }, 3000);
+}
+</script>
+
+<style>
+.survey-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2em;
+}
+
+.survey-description {
+    color: #666;
+    margin-bottom: 2em;
+}
+
+.question {
+    margin-bottom: 2em;
+    padding: 1.5em;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.question-text {
+    font-size: 1.1em;
+    margin-bottom: 1em;
+    color: #1f2937;
+}
+
+.required {
+    color: #ef4444;
+    margin-left: 0.25em;
+}
+
+.text-input {
+    width: 100%;
+    padding: 0.75em;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+.options {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+}
+
+.option {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: pointer;
+}
+
+.option input {
+    width: 1.2em;
+    height: 1.2em;
+}
+
+.form-actions {
+    margin-top: 2em;
+    text-align: center;
+}
+
+.message {
+    padding: 1em;
+    margin-bottom: 1em;
+    border-radius: 4px;
+    display: none;
+}
+
+.message.success {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.message.error {
+    background: #fee2e2;
+    color: #991b1b;
+}
+</style>
+{% endblock %} 

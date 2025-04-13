@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}公告列表{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <div class="page-header">
+        <h2>公告列表</h2>
+    </div>
+
+    <div class="announcements-list">
+        {% for announcement in announcements %}
+        <div class="card">
+            <div class="announcement-header">
+                <h3>{{ announcement.title }}</h3>
+                <span class="date">{{ announcement.created_at }}</span>
+            </div>
+            <div class="announcement-content">
+                {{ announcement.content[:200] }}{% if announcement.content|length > 200 %}...{% endif %}
+            </div>
+            <div class="announcement-actions">
+                <a href="{{ url_for('view_announcement', id=announcement.id) }}" class="btn-primary">查看详情</a>
+            </div>
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <p>暂无公告</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if pages > 1 %}
+    <div class="pagination">
+        {% for p in range(1, pages + 1) %}
+        <a href="?page={{ p }}" class="page-link {% if p == page %}active{% endif %}">{{ p }}</a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<style>
+.page-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2em;
+}
+
+.page-header {
+    margin-bottom: 2em;
+}
+
+.page-header h2 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.announcements-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5em;
+}
+
+.card {
+    background: white;
+    padding: 1.5em;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.announcement-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1em;
+}
+
+.announcement-header h3 {
+    margin: 0;
+    color: #1f2937;
+}
+
+.date {
+    color: #6b7280;
+    font-size: 0.875em;
+}
+
+.announcement-content {
+    color: #4b5563;
+    margin-bottom: 1em;
+    line-height: 1.5;
+}
+
+.announcement-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-primary {
+    background: #2563eb;
+    color: white;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.btn-primary:hover {
+    background: #1d4ed8;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 2em;
+    color: #6b7280;
+}
+
+.pagination {
+    display: flex;
+    justify-content: center;
+    gap: 0.5em;
+    margin-top: 2em;
+}
+
+.page-link {
+    padding: 0.5em 1em;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    color: #4b5563;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.page-link:hover {
+    background: #f3f4f6;
+}
+
+.page-link.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+</style>
+{% endblock %} 

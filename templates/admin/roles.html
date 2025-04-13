@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+{% block title %}角色管理{% endblock %}
+{% block content %}
+<div class="admin-page">
+    <div class="roles-container">
+        <h2>角色管理</h2>
+        <button onclick="showAddRoleModal()" class="btn-primary">添加角色</button>
+        
+        <table class="roles-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>名称</th>
+                    <th>APP ID</th>
+                    <th>描述</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="roles-list">
+                <!-- 将由JavaScript动态填充 -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- 角色表单模态框 -->
+<div id="role-modal" class="modal">
+    <div class="modal-content">
+        <h3 id="modal-title">添加角色</h3>
+        <form id="role-form">
+            <div class="form-group">
+                <label>角色ID</label>
+                <input type="text" id="role-id" required data-original="">
+            </div>
+            <div class="form-group">
+                <label>名称</label>
+                <input type="text" id="role-name" required>
+            </div>
+            <div class="form-group">
+                <label>APP ID</label>
+                <input type="text" id="role-app-id" required>
+            </div>
+            <div class="form-group">
+                <label>描述</label>
+                <textarea id="role-description"></textarea>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn-primary">保存</button>
+                <button type="button" onclick="closeModal()" class="btn-secondary">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+let isEditing = false;
+
+// 加载角色列表
+async function loadRoles() {
+    try {
+        const response = await fetch('/api/roles');
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            const tbody = document.getElementById('roles-list');
+            tbody.innerHTML = '';
+            
+            Object.entries(data.roles).forEach(([id, role]) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${id}</td>
+                    <td>${role.name}</td>
+                    <td>${role.app_id}</td>
+                    <td>${role.description || ''}</td>
+                    <td>
+                        ${id !== 'default' ? `
+                            <button onclick="editRole('${id}')" class="btn-secondary">编辑</button>
+                            <button onclick="deleteRole('${id}')" class="btn-danger">删除</button>
+                        ` : ''}
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+    } catch (error) {
+        console.error('加载角色列表失败:', error);
+        alert('加载角色列表失败');
+    }
+}
+
+// 编辑角色
+async function editRole(roleId) {
+    try {
+        const response = await fetch('/api/roles');
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.roles[roleId]) {
+            const role = data.roles[roleId];
+            
+            // 设置表单数据
+            document.getElementById('role-id').value = roleId;
+            document.getElementById('role-id').dataset.original = roleId;
+            document.getElementById('role-id').readOnly = true;
+            document.getElementById('role-name').value = role.name;
+            document.getElementById('role-app-id').value = role.app_id;
+            document.getElementById('role-description').value = role.description || '';
+            
+            // 更新模态框标题
+            document.getElementById('modal-title').textContent = '编辑角色';
+            
+            // 标记为编辑模式
+            isEditing = true;
+            
+            // 显示模态框
+            showModal();
+        }
+    } catch (error) {
+        console.error('获取角色信息失败:', error);
+        alert('获取角色信息失败');
+    }
+}
+
+// 显示添加角色模态框
+function showAddRoleModal() {
+    // 重置表单
+    document.getElementById('role-form').reset();
+    document.getElementById('role-id').readOnly = false;
+    document.getElementById('role-id').dataset.original = '';
+    document.getElementById('modal-title').textContent = '添加角色';
+    isEditing = false;
+    showModal();
+}
+
+// 显示模态框
+function showModal() {
+    document.getElementById('role-modal').style.display = 'block';
+}
+
+// 关闭模态框
+function closeModal() {
+    document.getElementById('role-modal').style.display = 'none';
+    document.getElementById('role-form').reset();
+}
+
+// 表单提交前验证
+document.getElementById('role-form').onsubmit = async function(e) {
+    e.preventDefault();
+    
+    // 获取并清理输入值
+    const roleId = document.getElementById('role-id').value.trim();
+    const name = document.getElementById('role-name').value.trim();
+    const appId = document.getElementById('role-app-id').value.trim();
+    const description = document.getElementById('role-description').value.trim();
+    
+    // 验证输入
+    if (!roleId || !name || !appId) {
+        showMessage('请填写所有必要字段', 'error');
+        return;
+    }
+    
+    // 验证 APP_ID 格式
+    if (!/^[0-9a-f]{32}$/.test(appId)) {
+        showMessage('APP ID 格式不正确', 'error');
+        return;
+    }
+    
+    const roleData = { role_id: roleId, name, app_id: appId, description };
+    
+    try {
+        const originalId = document.getElementById('role-id').dataset.original;
+        const method = isEditing ? 'PUT' : 'POST';
+        const url = isEditing ? `/api/roles/${originalId}` : '/api/roles';
+
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            },
+            body: JSON.stringify(roleData)
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert(isEditing ? '角色更新成功' : '角色创建成功');
+            closeModal();
+            loadRoles();
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('保存角色失败:', error);
+        alert('保存角色失败: ' + error.message);
+    }
+};
+
+// 删除角色
+async function deleteRole(roleId) {
+    if (!confirm('确定要删除这个角色吗？')) return;
+    
+    try {
+        const response = await fetch(`/api/roles/${roleId}`, {
+            method: 'DELETE',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            alert('角色删除成功');
+            loadRoles();
+        } else {
+            throw new Error(data.message);
+        }
+    } catch (error) {
+        console.error('删除角色失败:', error);
+        alert('删除角色失败: ' + error.message);
+    }
+}
+
+// 页面加载时初始化
+document.addEventListener('DOMContentLoaded', loadRoles);
+</script>
+
+<style>
+.roles-container {
+    padding: 20px;
+}
+
+.roles-table {
+    width: 100%;
+    margin-top: 20px;
+    border-collapse: collapse;
+}
+
+.roles-table th,
+.roles-table td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+</style>
+{% endblock %} 
